@@ -1,0 +1,34 @@
+﻿  main.cpp
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(358,25): warning C4267: '=': conversion from 'size_t' to 'GLuint', possible loss of data
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(364,20): warning C4018: '<': signed/unsigned mismatch
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(368,20): warning C4018: '<': signed/unsigned mismatch
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(372,20): warning C4018: '<': signed/unsigned mismatch
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(381,20): warning C4018: '<': signed/unsigned mismatch
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(394,45): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(400,43): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(405,45): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(412,62): warning C4267: '=': conversion from 'size_t' to '_Ty', possible loss of data
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(412,62): warning C4267:         with
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(412,62): warning C4267:         [
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(412,62): warning C4267:             _Ty=unsigned int
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(412,62): warning C4267:         ]
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(432,26): warning C4267: '=': conversion from 'size_t' to 'GLuint', possible loss of data
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(435,20): warning C4018: '<': signed/unsigned mismatch
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(491,20): warning C4018: '<': signed/unsigned mismatch
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(499,43): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(524,13): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(525,13): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(1053,14): warning C4305: '+=': truncation from 'double' to 'GLfloat'
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(1054,14): warning C4305: '+=': truncation from 'double' to 'GLfloat'
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(1055,13): warning C4305: '+=': truncation from 'double' to 'GLfloat'
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(1056,16): warning C4305: '+=': truncation from 'double' to 'GLfloat'
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(1107,48): warning C4267: 'argument': conversion from 'size_t' to 'int', possible loss of data
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(1267,12): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(1268,12): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(1272,17): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(1273,17): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(1274,11): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+C:\Users\chann\Documents\cpp\Graphics_Project_2024\src\main.cpp(1275,11): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+  GLM: perspective function taking degrees as a parameter is deprecated. #define GLM_FORCE_RADIANS before including GLM headers to remove this message.
+  GLM: rotate function taking degrees as a parameter is deprecated. #define GLM_FORCE_RADIANS before including GLM headers to remove this message.
+  Graphics_1.vcxproj -> C:\Users\chann\Documents\cpp\Graphics_Project_2024\Graphics_1.exe
