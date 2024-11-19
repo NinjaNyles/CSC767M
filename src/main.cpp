@@ -353,6 +353,7 @@ void load()
 	objects.push_back("assets/Octahedron.obj");
 	objects.push_back("assets/Heart.obj");
 	objects.push_back("assets/Hex.obj");
+	objects.push_back("assets/AmongUs.obj");
 	objects.push_back("assets/plane.obj");
 
 	objCount = objects.size();
@@ -427,6 +428,7 @@ void load()
 	textures.push_back("textures/Octahedron.png");
 	textures.push_back("textures/Heart.png");
 	textures.push_back("textures/Hex.png");
+	textures.push_back("textures/AmongUs.jpg");
 	textures.push_back("textures/rings.png");
 
 	texCount = textures.size();
@@ -840,6 +842,23 @@ void draw()
 		)
 	);
 
+	// among us
+	renderObject(14,
+		mat4(0.0f),
+		TransformationValues(
+			glm::vec3(3.0f, 6.5f, 1.0f),
+			glm::vec3(0.5f, 1.0f, 0.0f),
+			glm::vec3(0.008f, 0.008f, 0.008f)
+		),
+		MaterialProperties(
+			glm::vec3(0.1f, 0.1f, 0.1f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			20.0f,
+			1.0f
+		)
+	);
+
 	// settings for alpha map usage
 
 	glEnable(GL_BLEND);
@@ -847,7 +866,7 @@ void draw()
 	glDisable(GL_CULL_FACE);
 
 	// rings
-	renderObject(14,
+	renderObject(15,
 		models[3],					// parent model: saturn
 		TransformationValues(
 			glm::vec3(0.0f, 0.0f, 0.0f),
@@ -1354,5 +1373,3 @@ int main(void)
     glfwTerminate();
     return 0;
 }
-
-
