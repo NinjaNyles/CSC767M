@@ -38,35 +38,32 @@ const vec3 g_backgroundColor(0.0f, 0.0f, 0.0f); // background colour - a GLM 3-c
 
 // uniform location variables
 GLuint model_loc, view_loc, projection_loc, normal_loc, texture_loc;
-GLuint light_loc, light_color_loc, cam_pos_loc, ambient_loc, diffuse_loc, specular_loc, shininess_loc, alpha_loc;
+GLuint light_loc, light_intensity_loc, cam_pos_loc, ambient_loc, diffuse_loc, specular_loc, shininess_loc, alpha_loc;
 
 // if using orthographic project, and if using orbital camera settings
 bool orthographic = false;
 bool orbital = false;
+// for debugging purposes
 
 // camera variables
-glm::vec3 cameraPos = vec3(0.0f, 5.0f, 3.0f);								// Pos: position of camera
+glm::vec3 cameraPos = vec3(0.0f, 5.0f, 10.0f);								// Pos: position of camera
 glm::vec3 cameraTarget = vec3(0.0f, 4.0f, -2.0f);							// Center: where you wanna look at in world space
 glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 glm::vec3 cameraRight = glm::normalize(glm::cross(cameraTarget, cameraUp));
 float cameraSpeed = 0.25f;
 // would have created struct, but everything is declared here already, and they aren't used as often as other structs
 
+// fps camera variables
 bool firstMouse = true;
-float yawberry = -90.0f; //yaw
-float peach = 0.0f; //pitch
+float camera_yaw = -90.0f; //yaw
+float camera_pitch = 0.0f; //pitch
 float lastX = 512.0f / 2.0f;
 float lastY = 512.0f / 2.0f;
-float fov = 90.0f; //zoom
-
-bool peachUp = false;
-bool peachDown = false;
-bool yawLeft = false;
-bool yawRight = false;
+float fov = 90.0f; //field of view
 
 GLuint g_simpleShader = 0;				// shader identifier
 std::vector <GLuint> g_vao;				// vao vector
-std::vector <GLuint> g_NumTriangles;	// num triangles to paint vector
+std::vector <GLuint> g_NumTriangles;	// num triangles vector
 
 std::vector <std::string> objects;		// object vector
 std::vector < std::vector < tinyobj::shape_t > > shapesVector; // shapes vector
@@ -75,12 +72,12 @@ std::vector <std::string> textures;		// textures vector
 std::vector <GLuint> texture_ids;		// texture id vector
 
 // for setting for loops and vector sizes
-GLuint objCount;
-GLuint texCount;
+GLuint objCount;						// objects.size(), but to be called later
+GLuint texCount;						// textures.size(), but to be called later
 
 // light
-glm::vec3 g_light_dir(0.0f, 6.0f, 0.0f);
-glm::vec3 lightColor(10.0f, 10.0f, 10.0f);
+glm::vec3 g_light(10.0f, 10.0f, 10.0f);
+GLfloat light_intensity = 1.0f;
 
 // variables to transform objects
 GLfloat earth_rot = 0.0f;
@@ -93,11 +90,12 @@ GLfloat hex_rot = 90.0f;
 GLfloat saturn_rot = 90.0f;
 
 // skybox settings
-GLuint g_simpleShader_sky = 0;			// skybox shader identifier
-GLuint g_vao_sky = 0;					// skybox vao
-GLuint g_NumTriangles_sky = 0;			// num tris skybox
-GLuint texture_id_sky = 0;				// global texture id
-GLuint model_loc_sky, view_loc_sky, projection_loc_sky;
+//GLuint g_simpleShader_sky = 0;			// skybox shader identifier
+//GLuint g_vao_sky = 0;					// skybox vao
+//GLuint g_NumTriangles_sky = 0;			// num tris skybox
+//GLuint texture_id_sky = 0;				// global texture id
+//GLuint model_loc_sky, view_loc_sky, projection_loc_sky;
+// skybox settings no longer needed as it is stored in index 0 of vectors
 
 // matrices for projection, view, and model
 // model matrices stored in vector for mesh parenting
@@ -128,210 +126,13 @@ struct MaterialProperties {
 // Initialization of scene
 // ------------------------------------------------------------------------------------------
 void load()
-{/*
-	// load skybox shader
-	Shader simpleShaderSky("src/shader_sky.vert", "src/shader_sky.frag");
-	g_simpleShader_sky = simpleShaderSky.program;
-	
-	// skybox initialization
-
-	char filename_sky[] = "assets/sphere.obj";
-	vector <tinyobj::shape_t> shapes_sky;
-	bool ret_sky = tinyobj::LoadObj(shapes_sky, filename_sky);
-	g_vao_sky = gl_createAndBindVAO();
-	std::cout << "vao: " << g_vao_sky << "\n";
-	gl_createAndBindAttribute(&(shapes_sky[0].mesh.positions[0]),
-		shapes_sky[0].mesh.positions.size() * sizeof(float), g_simpleShader_sky,
-		"a_vertex", 3);
-	gl_createIndexBuffer(&(shapes_sky[0].mesh.indices[0]),
-		shapes_sky[0].mesh.indices.size() * sizeof(unsigned int));
-	gl_createAndBindAttribute(&(shapes_sky[0].mesh.texcoords[0]),
-		shapes_sky[0].mesh.texcoords.size() * sizeof(GLfloat), g_simpleShader_sky,
-		"a_uv", 2);
-	gl_unbindVAO();
-	g_NumTriangles_sky = shapes_sky[0].mesh.indices.size() / 3;
-
-	if (ret_sky) {
-		cout << "OBJ File: " << filename_sky << " (skybox) successfully loaded!\n";
-	}
-	else {
-		cout << "OBJ File: " << filename_sky << " (skybox) cannot be found or is not valid OBJ file.\n";
-	}
-
-	int width_sky, height_sky, numChannels_sky;
-
-	char path_sky[] = "textures/milkyway.bmp";
-	stbi_set_flip_vertically_on_load(true); // Remove if texture is flipped.
-	unsigned char* pixels_sky = stbi_load(path_sky, &width_sky, &height_sky, &numChannels_sky, 0);
-	glGenTextures(1, &texture_id_sky);
-	glBindTexture(GL_TEXTURE_2D, texture_id_sky);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-
-	if (pixels_sky) {
-		glTexImage2D(GL_TEXTURE_2D, // target
-			0, // level = 0 base, no mipmap
-			GL_RGB, // how the data will be stored(Grayscale, RGB, RGBA)
-			width_sky, // width of the image
-			height_sky, // height of the image
-			0, //border
-			GL_RGB, // format of original data
-			GL_UNSIGNED_BYTE,// type of data
-			pixels_sky
-		);
-		glGenerateMipmap(GL_TEXTURE_2D);
-
-		std::cout << "Successfully loaded: Texture " << path_sky << " with a width of " << width_sky << ", a height of " << height_sky << ", and uses " << numChannels_sky << " channels." << std::endl;
-	}
-	else {
-		std::cout << "Failed to load texture: " << path_sky << std::endl;
-	}
-
-	
-
-
-	// non-skybox initializations
-	
-	objects.push_back("assets/sphere.obj");
-	objects.push_back("assets/sphere.obj");
-	objects.push_back("assets/sphere.obj");
-	objects.push_back("assets/plane.obj");
-
-	objCount = objects.size();
-	models.resize(objCount);
-
-	for (int i = 0; i < objCount; i++)
-		shapesVector.emplace_back();
-
-	std::vector <bool> ret (objCount);
-	for (int i = 0; i < objCount; i++) {
-		ret[i] = tinyobj::LoadObj(shapesVector[i], objects[i].c_str());
-	}
-
-	for (int i = 0; i < objCount; i++) {
-		if (ret[i]) {
-			cout << "OBJ File: " << objects[i] << " successfully loaded!\n";
-		}
-		else {
-			cout << "OBJ File: " << objects[i] << " cannot be found or is not valid OBJ file.\n";
-		}
-	}
-
-	//load the shader
-	Shader simpleShader("src/shader.vert", "src/shader.frag");
-	g_simpleShader = simpleShader.program;
-
-	g_vao.resize(objCount);
-	g_NumTriangles.resize(objCount);
-	for (int i = 0; i < objCount; i++) {
-		g_vao[i] = gl_createAndBindVAO();
-		std::cout << "vao: " << g_vao[i] << "\n";
-
-		//gl_createAndBindAttribute(vertices, sizeof(vertices), g_simpleShader, "a_vertex", 3);
-		gl_createAndBindAttribute(&(shapesVector[i][0].mesh.positions[0]),
-			shapesVector[i][0].mesh.positions.size() * sizeof(float),
-			g_simpleShader, "a_vertex", 3
-		);
-
-		//gl_createIndexBuffer(indices, sizeof(indices));
-		gl_createIndexBuffer(&(shapesVector[i][0].mesh.indices[0]),
-			shapesVector[i][0].mesh.indices.size() * sizeof(unsigned int)
-		);
-
-		// this is in draw() -> renderObject()
-		//gl_createAndBindAttribute(&(shapesVector[i][0].mesh.texcoords[0]),
-		//	shapesVector[i][0].mesh.texcoords.size() * sizeof(float),
-		//	g_simpleShader, "a_uv", 2
-		//);
-
-		gl_unbindVAO();
-
-		//store number of triangles (use in draw())
-		g_NumTriangles[i] = shapesVector[i][0].mesh.indices.size() / 3; //sizeof(indices) / (sizeof(GLuint) * 3);
-	}
-
-	textures.push_back("textures/earth.bmp");
-	textures.push_back("textures/moon.bmp");
-	textures.push_back("textures/saturn.jpg");
-	textures.push_back("textures/rings.png");
-
-	texCount = textures.size();
-
-	texture_ids.resize(texCount);
-
-	for (int i = 0; i < texCount; i++) {
-		int width, height, numChannels;
-
-		stbi_set_flip_vertically_on_load(true); // remove if texture is flipped
-		unsigned char* pixels = stbi_load(textures[i].c_str(), &width, &height, &numChannels, 0);
-		glGenTextures(1, &texture_ids[i]);
-		glBindTexture(GL_TEXTURE_2D, texture_ids[i]);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-
-		if (pixels) {
-			if (numChannels == 4) {
-				glTexImage2D(
-					GL_TEXTURE_2D, // target
-					0, // level = 0 base, no mipmap
-					GL_RGBA, // how the data will be stored (Grayscale, RGB, RGBA)
-					width, //width of the image
-					height, //height of the image
-					0, // border
-					GL_RGBA, // format of original data
-					GL_UNSIGNED_BYTE, // type of data
-					pixels
-				);
-				std::cout << "Successfully loaded: Texture " << textures[i].c_str() << " with a width of " << width << ", a height of " << height << ", and uses 4 channels." << std::endl;
-			}
-			else if(numChannels == 3) {
-				glTexImage2D(
-					GL_TEXTURE_2D, // target
-					0, // level = 0 base, no mipmap
-					GL_RGB, // how the data will be stored (Grayscale, RGB, RGBA)
-					width, //width of the image
-					height, //height of the image
-					0, // border
-					GL_RGB, // format of original data
-					GL_UNSIGNED_BYTE, // type of data
-					pixels
-				);
-				std::cout << "Successfully loaded: Texture " << textures[i].c_str() << " with a width of " << width << ", a height of " << height << ", and uses 3 channels." << std::endl;
-			}
-			else {
-				std::cout << "Failed to load: Texture " << textures[i].c_str() << " with a width of " << width << ", a height of " << height << ", and uses " << numChannels << " channels. (error: channel)" << std::endl;
-			}
-			
-			glGenerateMipmap(GL_TEXTURE_2D);
-		}
-		else {
-			std::cout << "Failed to load: Texture: " << textures[i].c_str() << " with a width of " << width << ", a height of " << height << ", and uses " << numChannels << " channels. (error: pixels)" << std::endl;
-		}
-		stbi_image_free(pixels);
-
-		texture_loc = glGetUniformLocation(g_simpleShader, "u_texture");
-		glUniform1i(texture_loc, i);
-		glActiveTexture(GL_TEXTURE0 + i);
-		glBindTexture(GL_TEXTURE_2D, texture_ids[i]);
-	}
-
-	for (int i = 0; i < objCount; i++) {
-		gl_createAndBindAttribute(&(shapesVector[i][0].mesh.normals[0]),
-			shapesVector[i][0].mesh.normals.size() * sizeof(float),
-			g_simpleShader,
-			"a_normal", 3);
-	}
-	//*/
-
-
-
-
-
-
+{
 
 	// optimized version
 
 	// load skybox shader
-	Shader simpleShaderSky("src/shader_sky.vert", "src/shader_sky.frag");
-	g_simpleShader_sky = simpleShaderSky.program;
+	//Shader simpleShaderSky("src/shader_sky.vert", "src/shader_sky.frag");
+	//g_simpleShader_sky = simpleShaderSky.program;
 	// although regular shader file was redesigned to not need this
 
 	//load regular shader
@@ -340,6 +141,7 @@ void load()
 
 	// put obj file paths into a vector
 	objects.push_back("assets/sphere.obj");
+	objects.push_back("assets/Thread.obj");
 	objects.push_back("assets/sphere.obj");
 	objects.push_back("assets/sphere.obj");
 	objects.push_back("assets/sphere.obj");
@@ -368,9 +170,7 @@ void load()
 	std::vector <bool> ret(objCount);
 	for (int i = 0; i < objCount; i++) {
 		ret[i] = tinyobj::LoadObj(shapesVector[i], objects[i].c_str());
-	}
 
-	for (int i = 0; i < objCount; i++) {
 		if (ret[i]) {
 			cout << "OBJ File: " << objects[i] << " successfully loaded!\n";
 		}
@@ -384,37 +184,36 @@ void load()
 		g_vao[i] = gl_createAndBindVAO();
 		std::cout << "vao: " << g_vao[i] << "\n";
 
-		/*// if using g_simpleShader_sky
-		if (i == 0) {
-			chosen_shader = g_simpleShader_sky;
-		}
-		else chosen_shader = g_simpleShader;*/
+		// for skybox settings, they use regular shaders, but a component will indicate it is a skybox
 
-		//gl_createAndBindAttribute(vertices, sizeof(vertices), g_simpleShader, "a_vertex", 3);
 		gl_createAndBindAttribute(&(shapesVector[i][0].mesh.positions[0]),
 			shapesVector[i][0].mesh.positions.size() * sizeof(float),
 			chosen_shader, "a_vertex", 3
 		);
 
-		//gl_createIndexBuffer(indices, sizeof(indices));
 		gl_createIndexBuffer(&(shapesVector[i][0].mesh.indices[0]),
 			shapesVector[i][0].mesh.indices.size() * sizeof(unsigned int)
 		);
 
-		// 
 		gl_createAndBindAttribute(&(shapesVector[i][0].mesh.texcoords[0]),
 			shapesVector[i][0].mesh.texcoords.size() * sizeof(float),
 			chosen_shader, "a_uv", 2
 		);
 
+		gl_createAndBindAttribute(&(shapesVector[i][0].mesh.normals[0]),
+			shapesVector[i][0].mesh.normals.size() * sizeof(float),
+			chosen_shader, "a_normal", 3
+		);
+
 		gl_unbindVAO();
 
 		//store number of triangles (use in draw())
-		g_NumTriangles[i] = shapesVector[i][0].mesh.indices.size() / 3; //sizeof(indices) / (sizeof(GLuint) * 3);
+		g_NumTriangles[i] = shapesVector[i][0].mesh.indices.size() / 3;
 	}
 	
 	// put texture file paths into a vector
 	textures.push_back("textures/milkyway.bmp");
+	textures.push_back("textures/Thread.png");
 	textures.push_back("textures/earth.bmp");
 	textures.push_back("textures/moon.bmp");
 	textures.push_back("textures/saturn.jpg");
@@ -490,19 +289,6 @@ void load()
 		glBindTexture(GL_TEXTURE_2D, texture_ids[i]);
 	}
 
-	for (int i = 0; i < objCount; i++) {
-		GLuint chosen_shader = g_simpleShader;
-		/*// if using g_simpleShader_sky
-		if (i == 0) {
-			chosen_shader = g_simpleShader_sky;
-		}
-		else chosen_shader = g_simpleShader;*/
-		gl_createAndBindAttribute(&(shapesVector[i][0].mesh.normals[0]),
-			shapesVector[i][0].mesh.normals.size() * sizeof(float),
-			chosen_shader,
-			"a_normal", 3);
-	}
-
 }
 
 void renderObject(int index, mat4 model_parent, TransformationValues transform, MaterialProperties material);
@@ -520,7 +306,7 @@ void draw()
 	// camera settings
 	// 
 	// remove orthographic and orbital if there's time
-	// but both are also useful during testing...
+	// but both are also useful during testing and debugging...
 
 	float radius = 5.0f;
 	float camX = sin(glfwGetTime()) * radius;
@@ -612,6 +398,7 @@ void draw()
 
 	// activate shader
 	// glUseProgram(g_simpleShader);
+	// no need to reactivate because merged shader programs already
 	
 	// funtion takes the following parameters:
 	// index,
@@ -621,13 +408,30 @@ void draw()
 
 	// index 0 not here because index 0 is skybox
 
-	// earth
+	// thread
 	renderObject(1,
 		mat4(0.0f),
 		TransformationValues(
-			glm::vec3(earthX, 9.0f, earthZ),
+			glm::vec3(0.0f, 6.0f, 0.0f),
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3(0.05f, 0.7f, 0.05f)
+		),
+		MaterialProperties(
+			glm::vec3(0.1f, 0.1f, 0.1f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			100.0f,
+			1.0f
+		)
+	);
+	
+	// earth
+	renderObject(2,
+		mat4(0.0f),
+		TransformationValues(
+			glm::vec3(earthX, 0.0f, earthZ),
 			glm::vec3(0.0f, earth_rot, 0.0f),
-			glm::vec3(1.0f, 1.0f, 1.0f)
+			glm::vec3(0.5f, 0.5f, 0.5f)
 		),
 		MaterialProperties(
 			glm::vec3(0.1f, 0.1f, 0.1f),
@@ -637,14 +441,14 @@ void draw()
 			1.0f
 		)
 	);
-
+	
 	// moon
-	renderObject(2,
-		models[1],					// parent model: earth
+	renderObject(3,
+		models[2],					// parent model: earth
 		TransformationValues(
 			glm::vec3(0.0f, 0.0f, -3.0f),
 			glm::vec3(0.0f, moon_rot, 0.0f),
-			glm::vec3(0.25f, 0.25f, 0.25f)
+			glm::vec3(0.125f, 0.125f, 0.125f)
 		),
 		MaterialProperties(
 			glm::vec3(0.1f, 0.1f, 0.1f),
@@ -656,12 +460,12 @@ void draw()
 	);
 
 	// saturn
-	renderObject(3,
+	renderObject(4,
 		mat4(0.0f),
 		TransformationValues(
-			glm::vec3(0.0f, 4.0f, 0.0f),
+			glm::vec3(0.0f, 8.0f, 0.0f),
 			glm::vec3(0.0f, saturn_rot, 0.0f),
-			glm::vec3(1.0f, 1.0f, 1.0f)
+			glm::vec3(0.4f, 0.4f, 0.4f)
 		),
 		MaterialProperties(
 			glm::vec3(0.1f, 0.1f, 0.1f),
@@ -673,12 +477,12 @@ void draw()
 	);
 
 	// stellar (stellated dodecahedron)
-	renderObject(4,
+	renderObject(5,
 		mat4(0.0f),
 		TransformationValues(
-			glm::vec3(3.0f, 4.0f, -3.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f),
 			glm::vec3(0.0f, 0.0f, 0.0f),
-			glm::vec3(0.25f, 0.25f, 0.25f)
+			glm::vec3(0.15f, 0.15f, 0.15f)
 		),
 		MaterialProperties(
 			glm::vec3(0.1f, 0.1f, 0.1f),
@@ -690,12 +494,12 @@ void draw()
 	);
 
 	// cloud
-	renderObject(5,
+	renderObject(6,
 		mat4(0.0f),
 		TransformationValues(
-			glm::vec3(0.0f, 6.0f, 0.0f),
+			glm::vec3(0.0f, 2.0f, 0.0f),
 			glm::vec3(0.0f, 0.0f, 0.0f),
-			glm::vec3(0.5f, 0.5f, 0.5f)
+			glm::vec3(0.125f, 0.125f, 0.125f)
 		),
 		MaterialProperties(
 			glm::vec3(0.1f, 0.1f, 0.1f),
@@ -707,10 +511,10 @@ void draw()
 	);
 
 	// star
-	renderObject(6,
+	renderObject(7,
 		mat4(0.0f),
 		TransformationValues(
-			glm::vec3(-4.0f, 6.0f, -3.0f),
+			glm::vec3(0.0f, 3.0f, 0.0f),
 			glm::vec3(90.0f, 0.0f, 0.0f),
 			glm::vec3(0.5f, 0.5f, 0.5f)
 		),
@@ -724,11 +528,11 @@ void draw()
 	);
 
 	// crescent
-	renderObject(7,
-		models[1],					// parent model: earth
+	renderObject(8,
+		mat4(0.0f),
 		TransformationValues(
-			glm::vec3(-3.0f, 0.0f, -3.0f),
-			glm::vec3(90.0f, 0.0f, 0.0f),
+			glm::vec3(0.0f, 4.0f, 0.0f),
+			glm::vec3(90.0f, 90.0f, 0.0f),
 			glm::vec3(0.5f, 0.5f, 0.5f)
 		),
 		MaterialProperties(
@@ -741,12 +545,12 @@ void draw()
 	);
 
 	// icosahedron
-	renderObject(8,
+	renderObject(9,
 		mat4(0.0f),
 		TransformationValues(
-			glm::vec3(-3.0f, 0.0f, -3.0f),
+			glm::vec3(0.0f, 5.0f, 0.0f),
 			glm::vec3(90.0f, 0.0f, 0.0f),
-			glm::vec3(0.5f, 0.5f, 0.5f)
+			glm::vec3(0.2f, 0.2f, 0.2f)
 		),
 		MaterialProperties(
 			glm::vec3(0.1f, 0.1f, 0.1f),
@@ -758,11 +562,11 @@ void draw()
 	);
 
 	// coin
-	renderObject(9,
+	renderObject(10,
 		mat4(0.0f),
 		TransformationValues(
-			glm::vec3(0.0f, 0.0f, 0.0f),
-			glm::vec3(90.0f, coin_rot, 0.0f),
+			glm::vec3(0.0f, 6.0f, 0.0f),
+			glm::vec3(90.0f, 0.0f, coin_rot),
 			glm::vec3(0.5f, 0.5f, 0.5f)
 		),
 		MaterialProperties(
@@ -775,10 +579,10 @@ void draw()
 	);
 
 	// tetrahedron
-	renderObject(10,
+	renderObject(11,
 		mat4(0.0f),
 		TransformationValues(
-			glm::vec3(3.0f, 0.0f, -3.0f),
+			glm::vec3(0.0f, 7.0f, 0.0f),
 			glm::vec3(90.0f, 90.0f, 90.0f),
 			glm::vec3(0.5f, 0.5f, 0.5f)
 		),
@@ -792,12 +596,12 @@ void draw()
 	);
 
 	// octahedron
-	renderObject(11,
+	renderObject(12,
 		mat4(0.0f),
 		TransformationValues(
-			glm::vec3(3.0f, 0.0f, 0.0f),
+			glm::vec3(0.0f, 9.0f, 0.0f),
 			glm::vec3(0.0f, 0.0f, 0.0f),
-			glm::vec3(0.5f, 0.5f, 0.5f)
+			glm::vec3(0.2f, 0.2f, 0.2f)
 		),
 		MaterialProperties(
 			glm::vec3(0.1f, 0.1f, 0.1f),
@@ -809,12 +613,12 @@ void draw()
 	);
 
 	// heart
-	renderObject(12,
+	renderObject(13,
 		mat4(0.0f),
 		TransformationValues(
-			glm::vec3(-3.0f, 0.0f, 0.0f),
-			glm::vec3(0.0f, 0.0f, 0.0f),
-			glm::vec3(0.5f, 0.5f, 0.5f)
+			glm::vec3(0.0f, 10.0f, 0.0f),
+			glm::vec3(90.0f, 0.0f, 0.0f),
+			glm::vec3(0.2f, 0.2f, 0.2f)
 		),
 		MaterialProperties(
 			glm::vec3(0.1f, 0.1f, 0.1f),
@@ -826,12 +630,12 @@ void draw()
 	);
 
 	// hex
-	renderObject(13,
-		models[3],					// parent model: saturn
+	renderObject(14,
+		mat4(0.0f),
 		TransformationValues(
-			glm::vec3(-3.0f, 0.0f, 0.0f),
-			glm::vec3(0.0f, hex_rot, 0.0f),
-			glm::vec3(0.5f, 0.5f, 0.5f)
+			glm::vec3(0.0f, 11.0f, 0.0f),
+			glm::vec3(90.0f, hex_rot, 0.0f),
+			glm::vec3(0.25f, 0.25f, 0.25f)
 		),
 		MaterialProperties(
 			glm::vec3(0.1f, 0.1f, 0.1f),
@@ -843,7 +647,7 @@ void draw()
 	);
 
 	// among us
-	renderObject(14,
+	renderObject(15,
 		mat4(0.0f),
 		TransformationValues(
 			glm::vec3(3.0f, 6.5f, 1.0f),
@@ -866,221 +670,36 @@ void draw()
 	glDisable(GL_CULL_FACE);
 
 	// rings
-	renderObject(15,
-		models[3],					// parent model: saturn
+	renderObject(16,
+		models[4],					// parent model: saturn
 		TransformationValues(
 			glm::vec3(0.0f, 0.0f, 0.0f),
 			glm::vec3(ring_rot, 0.0f, 0.0f),
-			glm::vec3(5.0f, 5.0f, 5.0f)
+			glm::vec3(4.0f, 4.0f, 4.0f)
 		),
 		MaterialProperties(
 			glm::vec3(0.1f, 0.1f, 0.1f),
 			glm::vec3(1.0f, 1.0f, 1.0f),
 			glm::vec3(1.0f, 1.0f, 1.0f),
 			20.0f,
-			-1.0f					// use -1.0f for alpha maps
+			-1.0f					// use -1.0f for alpha maps (just like skybox)
 		)
 	);
-
-	// old code; brute force version
-
-	/*
-	// OBJ 1
-	
-	//bind the geometry
-	gl_bindVAO(g_vao[0]);
-
-	// texture coordinates attribute
-	gl_createAndBindAttribute(&(shapesVector[0][0].mesh.texcoords[0]),
-		shapesVector[0][0].mesh.texcoords.size() * sizeof(float),
-		g_simpleShader, "a_uv", 2);
-
-	glActiveTexture(GL_TEXTURE0 + 0);
-	glBindTexture(GL_TEXTURE_2D, texture_ids[0]);
-	glUniform1i(glGetUniformLocation(g_simpleShader, "u_texture"), 0);
-
-	light_loc = glGetUniformLocation(g_simpleShader, "u_light_dir");
-	light_color_loc = glGetUniformLocation(g_simpleShader, "u_light_color");
-	cam_pos_loc = glGetUniformLocation(g_simpleShader, "u_cam_pos");
-	ambient_loc = glGetUniformLocation(g_simpleShader, "u_ambient");
-	diffuse_loc = glGetUniformLocation(g_simpleShader, "u_diffuse");
-	specular_loc = glGetUniformLocation(g_simpleShader, "u_specular");
-	shininess_loc = glGetUniformLocation(g_simpleShader, "u_shininess");
-	alpha_loc = glGetUniformLocation(g_simpleShader, "u_alpha");
-
-	mat4 model_earth = translate(mat4(1.0f), vec3(earthX, 9.0f, earthZ)) *
-		rotate(mat4(1.0f), earth_rot, vec3(0.0f, 1.0f, 0.0f)) *
-		scale(mat4(1.0f), vec3(1.0f, 1.0f, 1.0f));
-	GLuint model_earth_loc = glGetUniformLocation(g_simpleShader, "u_model");
-	glUniformMatrix4fv(model_earth_loc, 1, GL_FALSE, glm::value_ptr(model_earth));
-	glm::mat4 normalMatrixEarth = glm::transpose(glm::inverse(model_earth));
-	GLuint normal_earth_loc = glGetUniformLocation(g_simpleShader, "a_normal");
-	glUniformMatrix4fv(normal_earth_loc, 1, GL_FALSE, glm::value_ptr(normalMatrixEarth));
-
-	glUniform3f(light_loc, g_light_dir.x, g_light_dir.y, g_light_dir.z);
-	glUniform3f(light_color_loc, lightColor.x, lightColor.y, lightColor.z);
-	glUniform3f(cam_pos_loc, cameraPos.x, cameraPos.y, cameraPos.z);
-	glUniform3f(ambient_loc, 0.1f, 0.1f, 0.1f);
-	glUniform3f(diffuse_loc, 1.0f, 1.0f, 1.0f);
-	glUniform3f(specular_loc, 1.0f, 1.0f, 1.0f);
-	glUniform1f(shininess_loc, 5.0f);
-	glUniform1f(alpha_loc, 1.0f);
-
-	// Draw to screen
-	glDrawElements(GL_TRIANGLES, 3 * g_NumTriangles[0], GL_UNSIGNED_INT, 0);
-
-	// OBJ 2
-
-	gl_bindVAO(g_vao[1]);
-
-	// texture coordinates attribute
-	gl_createAndBindAttribute(&(shapesVector[1][0].mesh.texcoords[0]),
-		shapesVector[1][0].mesh.texcoords.size() * sizeof(float),
-		g_simpleShader, "a_uv", 2);
-
-	glActiveTexture(GL_TEXTURE0 + 1); // +1 for texture unit 1
-	glBindTexture(GL_TEXTURE_2D, texture_ids[1]);
-	glUniform1i(glGetUniformLocation(g_simpleShader, "u_texture"), 1);
-
-	light_loc = glGetUniformLocation(g_simpleShader, "u_light_dir");
-	light_color_loc = glGetUniformLocation(g_simpleShader, "u_light_color");
-	cam_pos_loc = glGetUniformLocation(g_simpleShader, "u_cam_pos");
-	ambient_loc = glGetUniformLocation(g_simpleShader, "u_ambient");
-	diffuse_loc = glGetUniformLocation(g_simpleShader, "u_diffuse");
-	specular_loc = glGetUniformLocation(g_simpleShader, "u_specular");
-	shininess_loc = glGetUniformLocation(g_simpleShader, "u_shininess");
-	alpha_loc = glGetUniformLocation(g_simpleShader, "u_alpha");
-
-	mat4 model_moon = translate(mat4(1.0f), vec3(0.0f, 0.0f, -3.0f)) *
-		rotate(mat4(1.0f), moon_rot, vec3(0.0f, 1.0f, 0.0f)) *
-		scale(mat4(1.0f), vec3(0.25f, 0.25f, 0.25f));
-
-	model_moon = model_earth * model_moon;
-
-	GLuint model_moon_loc = glGetUniformLocation(g_simpleShader, "u_model");
-	glUniformMatrix4fv(model_moon_loc, 1, GL_FALSE, glm::value_ptr(model_moon));
-	glm::mat4 normalMatrixMoon = glm::transpose(glm::inverse(model_moon));
-	GLuint normal_moon_loc = glGetUniformLocation(g_simpleShader, "a_normal");
-	glUniformMatrix4fv(normal_moon_loc, 1, GL_FALSE, glm::value_ptr(normalMatrixMoon));
-
-	glUniform3f(light_loc, g_light_dir.x, g_light_dir.y, g_light_dir.z);
-	glUniform3f(cam_pos_loc, cameraPos.x, cameraPos.y, cameraPos.z);
-	glUniform3f(ambient_loc, 0.1f, 0.1f, 0.1f);
-	glUniform3f(diffuse_loc, 1.0f, 1.0f, 1.0f);
-	glUniform3f(specular_loc, 1.0f, 1.0f, 1.0f);
-	glUniform1f(shininess_loc, 10.0f);
-	glUniform1f(alpha_loc, 1.0f);
-
-	glDrawElements(GL_TRIANGLES, 3 * g_NumTriangles[1], GL_UNSIGNED_INT, 0);
-
-	// OBJ 3
-
-	gl_bindVAO(g_vao[2]);
-
-	gl_createAndBindAttribute(&(shapesVector[2][0].mesh.texcoords[0]),
-		shapesVector[2][0].mesh.texcoords.size() * sizeof(float),
-		g_simpleShader, "a_uv", 2);
-
-	glActiveTexture(GL_TEXTURE0 + 2); // +i for texture unit i
-	glBindTexture(GL_TEXTURE_2D, texture_ids[2]);
-	glUniform1i(glGetUniformLocation(g_simpleShader, "u_texture"), 2);
-
-	light_loc = glGetUniformLocation(g_simpleShader, "u_light_dir");
-	light_color_loc = glGetUniformLocation(g_simpleShader, "u_light_color");
-	cam_pos_loc = glGetUniformLocation(g_simpleShader, "u_cam_pos");
-	ambient_loc = glGetUniformLocation(g_simpleShader, "u_ambient");
-	diffuse_loc = glGetUniformLocation(g_simpleShader, "u_diffuse");
-	specular_loc = glGetUniformLocation(g_simpleShader, "u_specular");
-	shininess_loc = glGetUniformLocation(g_simpleShader, "u_shininess");
-	alpha_loc = glGetUniformLocation(g_simpleShader, "u_alpha");
-
-	mat4 model_saturn = translate(mat4(1.0f), vec3(0.0f, 4.0f, 0.0f)) *
-		rotate(mat4(1.0f), 0.0f, vec3(1.0f, 0.0f, 0.0f)) *
-		rotate(mat4(1.0f), 0.0f, vec3(0.0f, 1.0f, 0.0f)) *
-		rotate(mat4(1.0f), 0.0f, vec3(0.0f, 0.0f, 1.0f)) *
-		scale(mat4(1.0f), vec3(1.0f, 1.0f, 1.0f));
-	GLuint model_saturn_loc = glGetUniformLocation(g_simpleShader, "u_model");
-	glUniformMatrix4fv(model_saturn_loc, 1, GL_FALSE, glm::value_ptr(model_saturn));
-	glm::mat4 normal_matrix_saturn = glm::transpose(glm::inverse(model_saturn));
-	GLuint normal_saturn_loc = glGetUniformLocation(g_simpleShader, "a_normal");
-	glUniformMatrix4fv(normal_saturn_loc, 1, GL_FALSE, glm::value_ptr(normal_matrix_saturn));
-
-	glUniform3f(light_loc, g_light_dir.x, g_light_dir.y, g_light_dir.z);
-	glUniform3f(cam_pos_loc, cameraPos.x, cameraPos.y, cameraPos.z);
-	glUniform3f(ambient_loc, 0.1f, 0.1f, 0.1f);
-	glUniform3f(diffuse_loc, 1.0f, 1.0f, 1.0f);
-	glUniform3f(specular_loc, 1.0f, 1.0f, 1.0f);
-	glUniform1f(shininess_loc, 20.0f);
-	glUniform1f(alpha_loc, 1.0f);
-
-	glDrawElements(GL_TRIANGLES, 3 * g_NumTriangles[2], GL_UNSIGNED_INT, 0);
-
-	// OBJ 4
-
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glDisable(GL_CULL_FACE);
-
-	gl_bindVAO(g_vao[3]);
-
-	gl_createAndBindAttribute(&(shapesVector[3][0].mesh.texcoords[0]),
-		shapesVector[3][0].mesh.texcoords.size() * sizeof(float),
-		g_simpleShader, "a_uv", 2);
-
-	glUniform1i(glGetUniformLocation(g_simpleShader, "u_texture"), 3);
-	glActiveTexture(GL_TEXTURE0 + 3); // +i for texture unit i
-	glBindTexture(GL_TEXTURE_2D, texture_ids[3]);
-
-	light_loc = glGetUniformLocation(g_simpleShader, "u_light_dir");
-	light_color_loc = glGetUniformLocation(g_simpleShader, "u_light_color");
-	cam_pos_loc = glGetUniformLocation(g_simpleShader, "u_cam_pos");
-	ambient_loc = glGetUniformLocation(g_simpleShader, "u_ambient");
-	diffuse_loc = glGetUniformLocation(g_simpleShader, "u_diffuse");
-	specular_loc = glGetUniformLocation(g_simpleShader, "u_specular");
-	shininess_loc = glGetUniformLocation(g_simpleShader, "u_shininess");
-	alpha_loc = glGetUniformLocation(g_simpleShader, "u_alpha");
-
-	GLuint model_rings_loc = glGetUniformLocation(g_simpleShader, "u_model");
-
-	mat4 model_rings = translate(mat4(1.0f), vec3(0.0f, 0.0f, 0.0f)) *
-		rotate(mat4(1.0f), ring_rot, vec3(1.0f, 0.0f, 0.0f)) *
-		rotate(mat4(1.0f), 0.0f, vec3(0.0f, 1.0f, 0.0f)) *
-		rotate(mat4(1.0f), 0.0f, vec3(0.0f, 0.0f, 1.0f)) *
-		scale(mat4(1.0f), vec3(5.0f, 5.0f, 5.0f));
-
-	model_rings = model_saturn * model_rings;
-
-	glUniformMatrix4fv(model_rings_loc, 1, GL_FALSE, glm::value_ptr(model_rings));
-	glm::mat4 normal_matrix_rings = glm::transpose(glm::inverse(model_rings));
-	GLuint normal_rings_loc = glGetUniformLocation(g_simpleShader, "a_normal");
-	glUniformMatrix4fv(normal_rings_loc, 1, GL_FALSE, glm::value_ptr(normal_matrix_rings));
-
-	glUniform3f(light_loc, g_light_dir.x, g_light_dir.y, g_light_dir.z);
-	glUniform3f(cam_pos_loc, cameraPos.x, cameraPos.y, cameraPos.z);
-	glUniform3f(ambient_loc, 0.1f, 0.1f, 0.1f);
-	glUniform3f(diffuse_loc, 1.0f, 1.0f, 1.0f);
-	glUniform3f(specular_loc, 1.0f, 1.0f, 1.0f);
-	glUniform1f(shininess_loc, 20.0f);
-	glUniform1f(alpha_loc, -1.0f);
-
-	glDrawElements(GL_TRIANGLES, 3 * g_NumTriangles[3], GL_UNSIGNED_INT, 0);
-	//*/
-
-
 	
 	// object animations below
 	ring_rot += 0.005;
-	coin_rot += 0.005;
+	coin_rot += 0.01;
 	hex_rot += 0.025;
 	saturn_rot += 0.025;
+	earth_rot += 0.01;
 
 	// fps camera updates with code below
 
 	cameraTarget = glm::normalize(
 		vec3(
-			cos(glm::radians(yawberry)) * cos(glm::radians(peach)),
-			sin(glm::radians(peach)),
-			sin(glm::radians(yawberry)) * cos(glm::radians(peach))
+			cos(glm::radians(camera_yaw)) * cos(glm::radians(camera_pitch)),
+			sin(glm::radians(camera_pitch)),
+			sin(glm::radians(camera_yaw)) * cos(glm::radians(camera_pitch))
 		)
 	);
 
@@ -1088,13 +707,16 @@ void draw()
 
 	cameraTarget = glm::normalize(
 		vec3(
-			cos(glm::radians(yawberry)) * cos(glm::radians(peach)),
-			sin(glm::radians(peach)),
-			sin(glm::radians(yawberry)) * cos(glm::radians(peach))
+			cos(glm::radians(camera_yaw)) * cos(glm::radians(camera_pitch)),
+			sin(glm::radians(camera_pitch)),
+			sin(glm::radians(camera_yaw)) * cos(glm::radians(camera_pitch))
 		)
 	);
 
 	cameraRight = glm::normalize(glm::cross(cameraTarget, cameraUp));
+
+
+
 }
 
 // ------------------------------------------------------------------------------------------
@@ -1107,8 +729,8 @@ void renderObject(int index, mat4 model_parent, TransformationValues transform, 
 
 	// get uniform locations
 	texture_loc = glGetUniformLocation(g_simpleShader, "u_texture");
-	light_loc = glGetUniformLocation(g_simpleShader, "u_light_dir");
-	light_color_loc = glGetUniformLocation(g_simpleShader, "u_light_color");
+	light_loc = glGetUniformLocation(g_simpleShader, "u_light");
+	light_intensity_loc = glGetUniformLocation(g_simpleShader, "u_light_intensity");
 	cam_pos_loc = glGetUniformLocation(g_simpleShader, "u_cam_pos");
 	ambient_loc = glGetUniformLocation(g_simpleShader, "u_ambient");
 	diffuse_loc = glGetUniformLocation(g_simpleShader, "u_diffuse");
@@ -1121,11 +743,7 @@ void renderObject(int index, mat4 model_parent, TransformationValues transform, 
 	// bind vao
 	gl_bindVAO(g_vao[index]);
 
-	// render texture
-	gl_createAndBindAttribute(&(shapesVector[index][0].mesh.texcoords[0]),
-		shapesVector[index][0].mesh.texcoords.size() * sizeof(float),
-		g_simpleShader, "a_uv", 2);
-
+	// render textures
 	glUniform1i(texture_loc, index);
 	glActiveTexture(GL_TEXTURE0 + index);
 	glBindTexture(GL_TEXTURE_2D, texture_ids[index]);
@@ -1137,6 +755,7 @@ void renderObject(int index, mat4 model_parent, TransformationValues transform, 
 		rotate(mat4(1.0f), transform.rotation.z, vec3(0.0f, 0.0f, 1.0f)) *
 		scale(mat4(1.0f), vec3(transform.scale.x, transform.scale.y, transform.scale.z));
 
+	// perform parenting if model has one
 	if (model_parent != mat4(0.0f)) {
 		models[index] = model_parent * models[index];
 	}
@@ -1147,8 +766,8 @@ void renderObject(int index, mat4 model_parent, TransformationValues transform, 
 	glUniformMatrix4fv(normal_loc, 1, GL_FALSE, glm::value_ptr(normal_matrix));
 
 	// send material properties to shader
-	glUniform3f(light_loc, g_light_dir.x, g_light_dir.y, g_light_dir.z);
-	glUniform3f(light_color_loc, lightColor.x, lightColor.y, lightColor.z);
+	glUniform3f(light_loc, g_light.x, g_light.y, g_light.z);
+	glUniform1f(light_intensity_loc, light_intensity);
 	glUniform3f(cam_pos_loc, cameraPos.x, cameraPos.y, cameraPos.z);
 	glUniform3f(ambient_loc, material.ambient.x, material.ambient.y, material.ambient.z);
 	glUniform3f(diffuse_loc, material.diffuse.x, material.diffuse.y, material.diffuse.z);
@@ -1156,11 +775,9 @@ void renderObject(int index, mat4 model_parent, TransformationValues transform, 
 	glUniform1f(shininess_loc, material.shininess);
 	glUniform1f(alpha_loc, material.alpha);
 
-	// bind vao (doesn't work?)
-	//gl_bindVAO(g_vao[index]);
-
 	// draw to screen!
 	glDrawElements(GL_TRIANGLES, 3 * g_NumTriangles[index], GL_UNSIGNED_INT, 0);
+
 }
 
 // ------------------------------------------------------------------------------------------
@@ -1190,27 +807,35 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 		cout << "pressed a button, moving camera to the left" << endl;
 	}
 	if (key == GLFW_KEY_RIGHT && action == GLFW_PRESS) {
-		g_light_dir.x += 1.0f;
-		cout << "pressed right button, g_light_dir.x = " << g_light_dir.x << endl;
+		g_light.x += 1.0f;
+		cout << "pressed right button, g_light.x = " << g_light.x << endl;
 	}
 	if (key == GLFW_KEY_LEFT && action == GLFW_PRESS) {
-		g_light_dir.x -= 1.0f;
-		cout << "pressed left button, g_light_dir.x = " << g_light_dir.x << endl;
+		g_light.x -= 1.0f;
+		cout << "pressed left button, g_light.x = " << g_light.x << endl;
 	}
 	if (key == GLFW_KEY_DOWN && action == GLFW_PRESS) {
-		g_light_dir.z -= 1.0f;
-		cout << "pressed down button, g_light_dir.z = " << g_light_dir.z << endl;
+		g_light.z += 1.0f;
+		cout << "pressed down button, g_light.z = " << g_light.z << endl;
 	}
 	if (key == GLFW_KEY_UP && action == GLFW_PRESS) {
-		g_light_dir.z += 1.0f;
-		cout << "pressed up button, g_light_dir.z = " << g_light_dir.z << endl;
+		g_light.z -= 1.0f;
+		cout << "pressed up button, g_light.z = " << g_light.z << endl;
+	}
+	if (key == GLFW_KEY_RIGHT_BRACKET && action == GLFW_PRESS) {
+		g_light.y += 1.0f;
+		cout << "pressed right bracket button, g_light.y = " << g_light.y << endl;
+	}
+	if (key == GLFW_KEY_LEFT_BRACKET && action == GLFW_PRESS) {
+		g_light.y -= 1.0f;
+		cout << "pressed left bracket button, g_light.y = " << g_light.y << endl;
 	}
 	if (key == GLFW_KEY_N && action == GLFW_PRESS) {
-		lightColor -= 1.0f;
+		light_intensity -= 1.0f;
 		cout << "pressed n button, light intensity decreases" << endl;
 	}
 	if (key == GLFW_KEY_M && action == GLFW_PRESS) {
-		lightColor += 1.0f;
+		light_intensity += 1.0f;
 		cout << "pressed m button, light intensity increases" << endl;
 	}
 	if (key == GLFW_KEY_P && action == GLFW_PRESS) {
@@ -1224,11 +849,11 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 		cout << "pressed p button, orthographic = " << orthographic << endl;
 	}
 	if (key == GLFW_KEY_Q && action == GLFW_PRESS && !orbital) {
-		cameraPos += vec3(0.0f, 0.25f, 0.0f) * cameraSpeed;
+		cameraPos += cameraUp * cameraSpeed;
 		cout << "pressed q button, moving camera upward" << endl;
 	}
 	if (key == GLFW_KEY_Z && action == GLFW_PRESS && !orbital) {
-		cameraPos -= vec3(0.0f, 0.25f, 0.0f) * cameraSpeed;
+		cameraPos -= cameraUp * cameraSpeed;
 		cout << "pressed z button, moving camera downward" << endl;
 	}
 	if (key == GLFW_KEY_T && action == GLFW_PRESS) {
@@ -1296,19 +921,19 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
 		xoffset *= 0.001f;
 		yoffset *= 0.001f;
 
-		yawberry += xoffset;
-		peach += yoffset;
+		camera_yaw += xoffset;
+		camera_pitch += yoffset;
 
-		if (peach > 89.0f)
-			peach = 89.0f;
-		if (peach < -89.0f)
-			peach = -89.0f;
+		if (camera_pitch > 89.0f)
+			camera_pitch = 89.0f;
+		if (camera_pitch < -89.0f)
+			camera_pitch = -89.0f;
 
 		cameraTarget = glm::normalize(
 			vec3(
-				cos(glm::radians(yawberry)) * cos(glm::radians(peach)),
-				sin(glm::radians(peach)),
-				sin(glm::radians(yawberry)) * cos(glm::radians(peach))
+				cos(glm::radians(camera_yaw)) * cos(glm::radians(camera_pitch)),
+				sin(glm::radians(camera_pitch)),
+				sin(glm::radians(camera_yaw)) * cos(glm::radians(camera_pitch))
 			)
 		);
 	}
@@ -1320,10 +945,11 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
 	fov -= (float)yoffset;
-	if (fov < 1.0f)
-		fov = 1.0f;
-	if (fov > 180.0f)
-		fov = 180.0f;
+	if (fov < 20.0f)
+		fov = 20.0f;
+	if (fov > 160.0f)
+		fov = 160.0f;
+	cout << "fov = " << fov << endl;
 }
 
 int main(void)
@@ -1373,3 +999,5 @@ int main(void)
     glfwTerminate();
     return 0;
 }
+
+
