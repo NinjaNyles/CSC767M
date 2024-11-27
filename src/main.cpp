@@ -39,6 +39,7 @@ const vec3 g_backgroundColor(0.0f, 0.0f, 0.0f); // background colour - a GLM 3-c
 // uniform location variables
 GLuint model_loc, view_loc, projection_loc, normal_loc, texture_loc;
 GLuint light_loc, light_intensity_loc, cam_pos_loc, ambient_loc, diffuse_loc, specular_loc, shininess_loc, alpha_loc;
+GLuint offset_loc, particle_color_loc;
 
 // if using orthographic project, and if using orbital camera settings
 bool orthographic = false;
@@ -46,7 +47,7 @@ bool orbital = false;
 // for debugging purposes
 
 // camera variables
-glm::vec3 cameraPos = vec3(0.0f, 5.0f, 10.0f);								// Pos: position of camera
+glm::vec3 cameraPos = vec3(0.0f, 5.0f, 5.0f);								// Pos: position of camera
 glm::vec3 cameraTarget = vec3(0.0f, 4.0f, -2.0f);							// Center: where you wanna look at in world space
 glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 glm::vec3 cameraRight = glm::normalize(glm::cross(cameraTarget, cameraUp));
@@ -88,6 +89,9 @@ GLfloat ring_rot = 90.0f;
 GLfloat coin_rot = 90.0f;
 GLfloat hex_rot = 90.0f;
 GLfloat saturn_rot = 90.0f;
+GLfloat starX = 0.0f;
+GLfloat starY = 3.0f;
+GLfloat starZ = 0.0f;
 
 // skybox settings
 //GLuint g_simpleShader_sky = 0;			// skybox shader identifier
@@ -101,6 +105,11 @@ GLfloat saturn_rot = 90.0f;
 // model matrices stored in vector for mesh parenting
 mat4 view_matrix, projection_matrix;
 std::vector <mat4> models;
+
+// delta time variables, for animation purposes
+GLfloat currentTime = 0.0f;
+GLfloat lastTime = 0.0f;
+GLfloat deltaTime = 0.0f;
 
 struct TransformationValues {
 	// struct for transformation values
@@ -122,6 +131,40 @@ struct MaterialProperties {
 	MaterialProperties(glm::vec3 ambi, glm::vec3 diff, glm::vec3 spec, GLfloat shiny, GLfloat transparency) : ambient(ambi), diffuse(diff), specular(spec), shininess(shiny), alpha(transparency) {}
 };
 
+// mat4 model_parent, TransformationValues transform, MaterialProperties material
+
+struct Mesh {
+	// struct for mesh
+	TransformationValues transform;
+	MaterialProperties material;
+	GLuint object_index;
+	GLuint texture_index;
+	mat4 model_matrix;
+	mat4 model_matrix_parent;
+	string mesh_name;
+	Mesh* mesh_parent;
+
+	// constructor 
+	Mesh(string name, GLuint object_i, GLuint texture_i, TransformationValues t_values, MaterialProperties m_props, Mesh* parent = nullptr) : mesh_name(name), object_index(object_i), texture_index(texture_i), transform(t_values), material(m_props), mesh_parent(parent) {}
+};
+
+std::vector <Mesh> meshes;
+
+struct Particle {
+	// struct for unit in particle systems
+	glm::vec2 position, velocity;
+	glm::vec4 color;
+	GLfloat life;
+
+	// constructor, with default values, overridable
+	Particle() : position(0.0f), velocity(0.0f), color(1.0f), life(0.0f) {}
+};
+
+GLuint g_particleShader = 0;				// particle shader identifier
+GLuint particle_count = 500;
+std::vector<Particle> particles;		// vector of particles
+GLuint lastUsedParticle = 0;
+
 // ------------------------------------------------------------------------------------------
 // Initialization of scene
 // ------------------------------------------------------------------------------------------
@@ -139,12 +182,13 @@ void load()
 	Shader simpleShader("src/shader.vert", "src/shader.frag");
 	g_simpleShader = simpleShader.program;
 
+	//load particle shader
+	Shader particleShader("src/shader_particle.vert", "src/shader_particle.frag");
+	g_particleShader = particleShader.program;
+
 	// put obj file paths into a vector
 	objects.push_back("assets/sphere.obj");
 	objects.push_back("assets/Thread.obj");
-	objects.push_back("assets/sphere.obj");
-	objects.push_back("assets/sphere.obj");
-	objects.push_back("assets/sphere.obj");
 	objects.push_back("assets/Stellar.obj");
 	objects.push_back("assets/Cloud.obj");
 	objects.push_back("assets/Star.obj");
@@ -229,6 +273,7 @@ void load()
 	textures.push_back("textures/Hex.png");
 	textures.push_back("textures/AmongUs.jpg");
 	textures.push_back("textures/rings.png");
+	textures.push_back("textures/Starflake.png");
 
 	texCount = textures.size();
 	texture_ids.resize(texCount);
@@ -289,10 +334,343 @@ void load()
 		glBindTexture(GL_TEXTURE_2D, texture_ids[i]);
 	}
 
+	// put meshes into a vector
+
+	// meshes[0] = thread
+	meshes.push_back(Mesh(
+		"thread",
+		1,
+		1,
+		TransformationValues(
+			glm::vec3(0.0f, 6.0f, 0.0f),
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3(0.05f, 0.7f, 0.05f)
+		),
+		MaterialProperties(
+			glm::vec3(0.1f, 0.1f, 0.1f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			100.0f,
+			1.0f
+		)
+	));
+
+	// meshes[1] = earth
+	meshes.push_back(Mesh(
+		"earth",
+		0,
+		2,
+		TransformationValues(
+			glm::vec3(earthX, 0.0f, earthZ),
+			glm::vec3(0.0f, earth_rot, 0.0f),
+			glm::vec3(0.5f, 0.5f, 0.5f)
+		),
+		MaterialProperties(
+			glm::vec3(0.1f, 0.1f, 0.1f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			5.0f,
+			1.0f
+		)
+	));
+
+	// meshes[2] = moon
+	meshes.push_back(Mesh(
+		"moon",
+		0,
+		3,
+		TransformationValues(
+			glm::vec3(0.0f, 0.0f, -3.0f),
+			glm::vec3(0.0f, moon_rot, 0.0f),
+			glm::vec3(0.125f, 0.125f, 0.125f)
+		),
+		MaterialProperties(
+			glm::vec3(0.1f, 0.1f, 0.1f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			10.0f,
+			1.0f
+		),
+		&meshes[1]			// parent mesh: earth
+	));
+
+	// meshes[3] = saturn
+	meshes.push_back(Mesh(
+		"saturn",
+		0,
+		4,
+		TransformationValues(
+			glm::vec3(0.0f, 8.0f, 0.0f),
+			glm::vec3(0.0f, saturn_rot, 0.0f),
+			glm::vec3(0.4f, 0.4f, 0.4f)
+		),
+		MaterialProperties(
+			glm::vec3(0.1f, 0.1f, 0.1f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			20.0f,
+			1.0f
+		)
+	));
+
+	// meshes[4] = stellar (stellated dodecahedron)
+	meshes.push_back(Mesh(
+		"stellar",
+		2,
+		5,
+		TransformationValues(
+			glm::vec3(0.0f, 1.0f, 0.0f),
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3(0.15f, 0.15f, 0.15f)
+		),
+		MaterialProperties(
+			glm::vec3(0.1f, 0.1f, 0.1f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			20.0f,
+			1.0f
+		)
+	));
+
+	// meshes[5] = cloud
+	meshes.push_back(Mesh(
+		"cloud",
+		3,
+		6,
+		TransformationValues(
+			glm::vec3(0.0f, 2.0f, 0.0f),
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3(0.125f, 0.125f, 0.125f)
+		),
+		MaterialProperties(
+			glm::vec3(0.1f, 0.1f, 0.1f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			20.0f,
+			1.0f
+		)
+	));
+
+	// meshes[6] = star
+	meshes.push_back(Mesh(
+		"star",
+		4,
+		7,
+		TransformationValues(
+			glm::vec3(starX, starY, starZ),
+			glm::vec3(90.0f, 0.0f, 0.0f),
+			glm::vec3(0.5f, 0.5f, 0.5f)
+		),
+		MaterialProperties(
+			glm::vec3(0.1f, 0.1f, 0.1f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			1.0f,
+			1.0f
+		)
+	));
+
+	// meshes[7] = crescent
+	meshes.push_back(Mesh(
+		"crescent",
+		5,
+		8,
+		TransformationValues(
+			glm::vec3(0.0f, 4.0f, 0.0f),
+			glm::vec3(90.0f, 90.0f, 0.0f),
+			glm::vec3(0.5f, 0.5f, 0.5f)
+		),
+		MaterialProperties(
+			glm::vec3(0.1f, 0.1f, 0.1f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			10.0f,
+			1.0f
+		)
+	));
+
+	// meshes[8] = icosahedron
+	meshes.push_back(Mesh(
+		"icosahedron",
+		6,
+		9,
+		TransformationValues(
+			glm::vec3(0.0f, 5.0f, 0.0f),
+			glm::vec3(90.0f, 0.0f, 0.0f),
+			glm::vec3(0.2f, 0.2f, 0.2f)
+		),
+		MaterialProperties(
+			glm::vec3(0.1f, 0.1f, 0.1f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			10.0f,
+			1.0f
+		)
+	));
+
+	// meshes[9] = coin
+	meshes.push_back(Mesh(
+		"coin",
+		7,
+		10,
+		TransformationValues(
+			glm::vec3(0.0f, 6.0f, 0.0f),
+			glm::vec3(90.0f, 0.0f, coin_rot),
+			glm::vec3(0.5f, 0.5f, 0.5f)
+		),
+		MaterialProperties(
+			glm::vec3(0.1f, 0.1f, 0.1f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			10.0f,
+			1.0f
+		)
+	));
+
+	// meshes[10] = tetrahedron
+	meshes.push_back(Mesh(
+		"tetrahedron",
+		8,
+		11,
+		TransformationValues(
+			glm::vec3(0.0f, 7.0f, 0.0f),
+			glm::vec3(90.0f, 90.0f, 90.0f),
+			glm::vec3(0.5f, 0.5f, 0.5f)
+		),
+		MaterialProperties(
+			glm::vec3(0.1f, 0.1f, 0.1f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			10.0f,
+			1.0f
+		)
+	));
+
+	// meshes[11] = octahedron
+	meshes.push_back(Mesh(
+		"octahedron",
+		9,
+		12,
+		TransformationValues(
+			glm::vec3(0.0f, 9.0f, 0.0f),
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3(0.2f, 0.2f, 0.2f)
+		),
+		MaterialProperties(
+			glm::vec3(0.1f, 0.1f, 0.1f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			100.0f,
+			1.0f
+		)
+	));
+
+	// meshes[12] = heart
+	meshes.push_back(Mesh(
+		"heart",
+		10,
+		13,
+		TransformationValues(
+			glm::vec3(0.0f, 10.0f, 0.0f),
+			glm::vec3(90.0f, 0.0f, 0.0f),
+			glm::vec3(0.2f, 0.2f, 0.2f)
+		),
+		MaterialProperties(
+			glm::vec3(0.1f, 0.1f, 0.1f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			20.0f,
+			1.0f
+		)
+	));
+
+	// meshes[13] = hex
+	meshes.push_back(Mesh(
+		"hex",
+		11,
+		14,
+		TransformationValues(
+			glm::vec3(0.0f, 11.0f, 0.0f),
+			glm::vec3(90.0f, hex_rot, 0.0f),
+			glm::vec3(0.25f, 0.25f, 0.25f)
+		),
+		MaterialProperties(
+			glm::vec3(0.1f, 0.1f, 0.1f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			25.0f,
+			1.0f
+		)
+	));
+
+	// meshes[14] = amogus
+	meshes.push_back(Mesh(
+		"amogus",
+		12,
+		15,
+		TransformationValues(
+			glm::vec3(3.0f, 6.5f, 1.0f),
+			glm::vec3(0.5f, 1.0f, 0.0f),
+			glm::vec3(0.008f, 0.008f, 0.008f)
+		),
+		MaterialProperties(
+			glm::vec3(0.1f, 0.1f, 0.1f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			20.0f,
+			1.0f
+		)
+	));
+
+	// meshes[15] = rings
+	meshes.push_back(Mesh(
+		"rings",
+		13,
+		16,
+		TransformationValues(
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3(ring_rot, 0.0f, 0.0f),
+			glm::vec3(4.0f, 4.0f, 4.0f)
+		),
+		MaterialProperties(
+			glm::vec3(0.1f, 0.1f, 0.1f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			20.0f,
+			-1.0f					// use -1.0f for alpha maps (just like skybox)
+		),
+		&meshes[3]
+	));
+	meshes[15].model_matrix_parent = meshes[3].model_matrix;
+
+	// meshes[16] = particle
+	meshes.push_back(Mesh(
+		"particle",
+		13,
+		17,
+		TransformationValues(
+			glm::vec3(0.0f, 0.0f, 0.0f),
+			glm::vec3(ring_rot, 0.0f, 0.0f),
+			glm::vec3(4.0f, 4.0f, 4.0f)
+		),
+		MaterialProperties(
+			glm::vec3(0.1f, 0.1f, 0.1f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			20.0f,
+			-1.0f					// use -1.0f for alpha maps (just like skybox)
+		)
+	));
+
+	for (int i = 0; i < particle_count; i++)
+		particles.push_back(Particle());
+
 }
 
-void renderObject(int index, mat4 model_parent, TransformationValues transform, MaterialProperties material);
-// ^ to tell the program the this functions exists below
+void renderObject(Mesh mesh);
+int firstUnusedParticle();
+void respawnParticle(Particle& particle, Mesh object);
+// ^ to tell the program these functions exists below
 
 // ------------------------------------------------------------------------------------------
 // This function actually draws to screen and called non-stop, in a loop
@@ -406,262 +784,11 @@ void draw()
 	// TransformationValues (translate, rotate, scale),
 	// MaterialProperties (ambient, diffuse, specular, shininess, alpha)
 
-	// index 0 not here because index 0 is skybox
 
-	// thread
-	renderObject(1,
-		mat4(0.0f),
-		TransformationValues(
-			glm::vec3(0.0f, 6.0f, 0.0f),
-			glm::vec3(0.0f, 0.0f, 0.0f),
-			glm::vec3(0.05f, 0.7f, 0.05f)
-		),
-		MaterialProperties(
-			glm::vec3(0.1f, 0.1f, 0.1f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			100.0f,
-			1.0f
-		)
-	);
-	
-	// earth
-	renderObject(2,
-		mat4(0.0f),
-		TransformationValues(
-			glm::vec3(earthX, 0.0f, earthZ),
-			glm::vec3(0.0f, earth_rot, 0.0f),
-			glm::vec3(0.5f, 0.5f, 0.5f)
-		),
-		MaterialProperties(
-			glm::vec3(0.1f, 0.1f, 0.1f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			5.0f,
-			1.0f
-		)
-	);
-	
-	// moon
-	renderObject(3,
-		models[2],					// parent model: earth
-		TransformationValues(
-			glm::vec3(0.0f, 0.0f, -3.0f),
-			glm::vec3(0.0f, moon_rot, 0.0f),
-			glm::vec3(0.125f, 0.125f, 0.125f)
-		),
-		MaterialProperties(
-			glm::vec3(0.1f, 0.1f, 0.1f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			10.0f,
-			1.0f
-		)
-	);
 
-	// saturn
-	renderObject(4,
-		mat4(0.0f),
-		TransformationValues(
-			glm::vec3(0.0f, 8.0f, 0.0f),
-			glm::vec3(0.0f, saturn_rot, 0.0f),
-			glm::vec3(0.4f, 0.4f, 0.4f)
-		),
-		MaterialProperties(
-			glm::vec3(0.1f, 0.1f, 0.1f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			20.0f,
-			1.0f
-		)
-	);
-
-	// stellar (stellated dodecahedron)
-	renderObject(5,
-		mat4(0.0f),
-		TransformationValues(
-			glm::vec3(0.0f, 1.0f, 0.0f),
-			glm::vec3(0.0f, 0.0f, 0.0f),
-			glm::vec3(0.15f, 0.15f, 0.15f)
-		),
-		MaterialProperties(
-			glm::vec3(0.1f, 0.1f, 0.1f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			20.0f,
-			1.0f
-		)
-	);
-
-	// cloud
-	renderObject(6,
-		mat4(0.0f),
-		TransformationValues(
-			glm::vec3(0.0f, 2.0f, 0.0f),
-			glm::vec3(0.0f, 0.0f, 0.0f),
-			glm::vec3(0.125f, 0.125f, 0.125f)
-		),
-		MaterialProperties(
-			glm::vec3(0.1f, 0.1f, 0.1f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			20.0f,
-			1.0f
-		)
-	);
-
-	// star
-	renderObject(7,
-		mat4(0.0f),
-		TransformationValues(
-			glm::vec3(0.0f, 3.0f, 0.0f),
-			glm::vec3(90.0f, 0.0f, 0.0f),
-			glm::vec3(0.5f, 0.5f, 0.5f)
-		),
-		MaterialProperties(
-			glm::vec3(0.1f, 0.1f, 0.1f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			1.0f,
-			1.0f
-		)
-	);
-
-	// crescent
-	renderObject(8,
-		mat4(0.0f),
-		TransformationValues(
-			glm::vec3(0.0f, 4.0f, 0.0f),
-			glm::vec3(90.0f, 90.0f, 0.0f),
-			glm::vec3(0.5f, 0.5f, 0.5f)
-		),
-		MaterialProperties(
-			glm::vec3(0.1f, 0.1f, 0.1f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			10.0f,
-			1.0f
-		)
-	);
-
-	// icosahedron
-	renderObject(9,
-		mat4(0.0f),
-		TransformationValues(
-			glm::vec3(0.0f, 5.0f, 0.0f),
-			glm::vec3(90.0f, 0.0f, 0.0f),
-			glm::vec3(0.2f, 0.2f, 0.2f)
-		),
-		MaterialProperties(
-			glm::vec3(0.1f, 0.1f, 0.1f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			10.0f,
-			1.0f
-		)
-	);
-
-	// coin
-	renderObject(10,
-		mat4(0.0f),
-		TransformationValues(
-			glm::vec3(0.0f, 6.0f, 0.0f),
-			glm::vec3(90.0f, 0.0f, coin_rot),
-			glm::vec3(0.5f, 0.5f, 0.5f)
-		),
-		MaterialProperties(
-			glm::vec3(0.1f, 0.1f, 0.1f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			10.0f,
-			1.0f
-		)
-	);
-
-	// tetrahedron
-	renderObject(11,
-		mat4(0.0f),
-		TransformationValues(
-			glm::vec3(0.0f, 7.0f, 0.0f),
-			glm::vec3(90.0f, 90.0f, 90.0f),
-			glm::vec3(0.5f, 0.5f, 0.5f)
-		),
-		MaterialProperties(
-			glm::vec3(0.1f, 0.1f, 0.1f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			10.0f,
-			1.0f
-		)
-	);
-
-	// octahedron
-	renderObject(12,
-		mat4(0.0f),
-		TransformationValues(
-			glm::vec3(0.0f, 9.0f, 0.0f),
-			glm::vec3(0.0f, 0.0f, 0.0f),
-			glm::vec3(0.2f, 0.2f, 0.2f)
-		),
-		MaterialProperties(
-			glm::vec3(0.1f, 0.1f, 0.1f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			100.0f,
-			1.0f
-		)
-	);
-
-	// heart
-	renderObject(13,
-		mat4(0.0f),
-		TransformationValues(
-			glm::vec3(0.0f, 10.0f, 0.0f),
-			glm::vec3(90.0f, 0.0f, 0.0f),
-			glm::vec3(0.2f, 0.2f, 0.2f)
-		),
-		MaterialProperties(
-			glm::vec3(0.1f, 0.1f, 0.1f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			20.0f,
-			1.0f
-		)
-	);
-
-	// hex
-	renderObject(14,
-		mat4(0.0f),
-		TransformationValues(
-			glm::vec3(0.0f, 11.0f, 0.0f),
-			glm::vec3(90.0f, hex_rot, 0.0f),
-			glm::vec3(0.25f, 0.25f, 0.25f)
-		),
-		MaterialProperties(
-			glm::vec3(0.1f, 0.1f, 0.1f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			25.0f,
-			1.0f
-		)
-	);
-
-	// among us
-	renderObject(15,
-		mat4(0.0f),
-		TransformationValues(
-			glm::vec3(3.0f, 6.5f, 1.0f),
-			glm::vec3(0.5f, 1.0f, 0.0f),
-			glm::vec3(0.008f, 0.008f, 0.008f)
-		),
-		MaterialProperties(
-			glm::vec3(0.1f, 0.1f, 0.1f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			20.0f,
-			1.0f
-		)
-	);
+	for (int i = 0; i < 15; i++) {
+		renderObject(meshes[i]);
+	}
 
 	// settings for alpha map usage
 
@@ -669,29 +796,76 @@ void draw()
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glDisable(GL_CULL_FACE);
 
-	// rings
-	renderObject(16,
-		models[4],					// parent model: saturn
-		TransformationValues(
-			glm::vec3(0.0f, 0.0f, 0.0f),
-			glm::vec3(ring_rot, 0.0f, 0.0f),
-			glm::vec3(4.0f, 4.0f, 4.0f)
-		),
-		MaterialProperties(
-			glm::vec3(0.1f, 0.1f, 0.1f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			20.0f,
-			-1.0f					// use -1.0f for alpha maps (just like skybox)
-		)
-	);
+	// rings (alpha map)
+
+	renderObject(meshes[15]);
 	
 	// object animations below
-	ring_rot += 0.005;
-	coin_rot += 0.01;
-	hex_rot += 0.025;
-	saturn_rot += 0.025;
-	earth_rot += 0.01;
+	meshes[15].transform.rotation.x += 0.005;					// ring_rot
+	meshes[9].transform.rotation.z += 0.01;						// coin_rot
+	meshes[13].transform.rotation.y += 0.025;					// hex_rot
+	meshes[1].transform.rotation.y += 0.01;						// earth_rot
+	meshes[2].transform.rotation.y -= 0.01;						// moon_rot
+
+	// particles
+
+	int particle_count_new = 2;
+	// add new particles
+	for (int i = 0; i < particle_count_new; i++)
+	{
+		int unusedParticle = firstUnusedParticle();
+		respawnParticle(particles[unusedParticle], meshes[6]);
+	}
+
+	currentTime = glfwGetTime();
+	deltaTime = currentTime - lastTime;
+	// update all particles
+	for (int i = 0; i < particle_count; i++)
+	{
+		Particle& p = particles[i];
+		p.life -= deltaTime; // reduce life
+		if (p.life > 0.0f)
+		{	// particle is alive, thus update
+			p.position -= p.velocity * deltaTime;
+			p.color.a -= deltaTime * 2.5f;
+		}
+	}
+
+	// render particles
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+	glUseProgram(g_particleShader);
+
+	for (Particle particle : particles)
+	{
+		if (particle.life > 0.0f)
+		{
+			//offset uniform
+			offset_loc = glGetUniformLocation(g_particleShader, "offset");
+			glUniform2f(offset_loc, particle.position.x, particle.position.y);  // Set x and y position
+
+			//color uniform
+			particle_color_loc = glGetUniformLocation(g_particleShader, "color");
+			glUniform4f(particle_color_loc, particle.color.r, particle.color.g, particle.color.b, particle.color.a);  // Set RGBA color
+
+			//particleTexture.Bind();
+			
+			glUniform1i(texture_loc, 17);
+			glActiveTexture(GL_TEXTURE0 + 17);
+			glBindTexture(GL_TEXTURE_2D, texture_ids[17]);
+			glUniform1i(glGetUniformLocation(g_particleShader, "sprite"), 0);
+
+			glm::mat4 particleTransform = glm::translate(models[13], glm::vec3(particle.position, 0.0f));
+			glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(particleTransform));
+
+			//gl_bindVAO(g_vao[13]);
+			glBindVertexArray(g_vao[13]);
+			glDrawArrays(GL_TRIANGLES, 0, 6);
+			glBindVertexArray(0);
+
+			//glDrawElements(GL_TRIANGLES, 3 * g_NumTriangles[17], GL_UNSIGNED_INT, 0);
+		}
+	}
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	// fps camera updates with code below
 
@@ -715,15 +889,19 @@ void draw()
 
 	cameraRight = glm::normalize(glm::cross(cameraTarget, cameraUp));
 
-
-
 }
 
 // ------------------------------------------------------------------------------------------
 // This function is called to render an object to screen
 // ------------------------------------------------------------------------------------------
-void renderObject(int index, mat4 model_parent, TransformationValues transform, MaterialProperties material)
+void renderObject(Mesh mesh)
 {
+	// lay out variables from struct for clarity
+	GLuint object_index = mesh.object_index;
+	GLuint texture_index = mesh.texture_index;
+	TransformationValues transform = mesh.transform;
+	MaterialProperties material = mesh.material;
+
 	// activate shader
 	glUseProgram(g_simpleShader);
 
@@ -740,29 +918,38 @@ void renderObject(int index, mat4 model_parent, TransformationValues transform, 
 	model_loc = glGetUniformLocation(g_simpleShader, "u_model");
 	normal_loc = glGetUniformLocation(g_simpleShader, "a_normal");
 
-	// bind vao
-	gl_bindVAO(g_vao[index]);
-
 	// render textures
-	glUniform1i(texture_loc, index);
-	glActiveTexture(GL_TEXTURE0 + index);
-	glBindTexture(GL_TEXTURE_2D, texture_ids[index]);
+	glUniform1i(texture_loc, texture_index);
+	glActiveTexture(GL_TEXTURE0 + texture_index);
+	glBindTexture(GL_TEXTURE_2D, texture_ids[texture_index]);
 
 	// object transformations
-	models[index] = translate(mat4(1.0f), vec3(transform.translation.x, transform.translation.y, transform.translation.z)) *
+	// (formerly models[object_index])
+	models[object_index] = translate(mat4(1.0f), vec3(transform.translation.x, transform.translation.y, transform.translation.z)) *
 		rotate(mat4(1.0f), transform.rotation.x, vec3(1.0f, 0.0f, 0.0f)) *
 		rotate(mat4(1.0f), transform.rotation.y, vec3(0.0f, 1.0f, 0.0f)) *
 		rotate(mat4(1.0f), transform.rotation.z, vec3(0.0f, 0.0f, 1.0f)) *
 		scale(mat4(1.0f), vec3(transform.scale.x, transform.scale.y, transform.scale.z));
 
+	mesh.model_matrix = models[object_index];
+
+	// old code
+	/*if (mesh.model_matrix_parent != mat4(0.0f)) {
+		models[texture_index] = mesh.model_matrix_parent * models[texture_index];
+	}*/
+
 	// perform parenting if model has one
-	if (model_parent != mat4(0.0f)) {
-		models[index] = model_parent * models[index];
+	if (mesh.mesh_parent != nullptr) {
+		Mesh& parent = *mesh.mesh_parent;
+		mesh.model_matrix = parent.model_matrix * mesh.model_matrix;
+
+		//mesh.model_matrix = mesh.model_matrix_parent * mesh.model_matrix;
+		//cout << "Mesh " << mesh.mesh_name << " has a parent model." << endl;
 	}
 
 	// send transformations and normals to shader
-	glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(models[index]));
-	glm::mat4 normal_matrix = glm::transpose(glm::inverse(models[index]));
+	glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(mesh.model_matrix));	//(models[object_index]));
+	glm::mat4 normal_matrix = glm::transpose(glm::inverse(mesh.model_matrix));		//(models[object_index]));
 	glUniformMatrix4fv(normal_loc, 1, GL_FALSE, glm::value_ptr(normal_matrix));
 
 	// send material properties to shader
@@ -775,9 +962,43 @@ void renderObject(int index, mat4 model_parent, TransformationValues transform, 
 	glUniform1f(shininess_loc, material.shininess);
 	glUniform1f(alpha_loc, material.alpha);
 
-	// draw to screen!
-	glDrawElements(GL_TRIANGLES, 3 * g_NumTriangles[index], GL_UNSIGNED_INT, 0);
+	// bind vao
+	gl_bindVAO(g_vao[object_index]);
 
+	// draw to screen!
+	glDrawElements(GL_TRIANGLES, 3 * g_NumTriangles[object_index], GL_UNSIGNED_INT, 0);
+
+}
+
+int firstUnusedParticle()
+{
+	// search from last used particle, this will usually return almost instantly
+	for (int i = lastUsedParticle; i < particle_count; i++) {
+		if (particles[i].life <= 0.0f) {
+			lastUsedParticle = i;
+			return i;
+		}
+	}
+	// otherwise, do a linear search
+	for (int i = 0; i < lastUsedParticle; i++) {
+		if (particles[i].life <= 0.0f) {
+			lastUsedParticle = i;
+			return i;
+		}
+	}
+	// override first particle if all others are alive
+	lastUsedParticle = 0;
+	return 0;
+}
+
+void respawnParticle(Particle& particle, Mesh object) //3rd var: offset, but not included
+{
+	float random = ((rand() % 100) - 50) / 10.0f;
+	float random_color = 0.5f + ((rand() % 100) / 100.0f);
+	particle.position = vec2(object.transform.translation.x, object.transform.translation.y) + random; // + offset, but not included
+	particle.color = glm::vec4(random_color, random_color, random_color, 1.0f);
+	particle.life = 1.0f;
+	particle.velocity = glm::vec2(((rand() % 100) - 50) / 10.0f, ((rand() % 100) - 50) / 10.0f); // random velocity
 }
 
 // ------------------------------------------------------------------------------------------
