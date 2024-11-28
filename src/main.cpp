@@ -667,7 +667,7 @@ void load()
 
 }
 
-void renderObject(Mesh mesh);
+void renderObject(Mesh mesh, float y_offset);
 int firstUnusedParticle();
 void respawnParticle(Particle& particle, Mesh object);
 // ^ to tell the program these functions exists below
@@ -784,10 +784,23 @@ void draw()
 	// TransformationValues (translate, rotate, scale),
 	// MaterialProperties (ambient, diffuse, specular, shininess, alpha)
 
+	// Animation parameters
+	float currentTime = glfwGetTime(); // Time elapsed
+	float speed = 1.0f;                // Speed of movement
+	float loopHeight = 10.0f;          // Total height of the motion path
+	int numObjects = 15;               // Total number of objects
+	float spacing = 20.0f; // Equal spacing between objects
 
+	// render thread
+	renderObject(meshes[0], 0.0f);
 
-	for (int i = 0; i < 15; i++) {
-		renderObject(meshes[i]);
+	// Render objects with circular motion
+	for (int i = 1; i < numObjects; i++) {
+		// Calculate y-offset based on object's index and time
+		float y_offset = loopHeight - fmod(i * spacing + speed * currentTime, loopHeight);
+
+		// Render object at calculated position
+		renderObject(meshes[i], y_offset);
 	}
 
 	// settings for alpha map usage
@@ -798,7 +811,7 @@ void draw()
 
 	// rings (alpha map)
 
-	renderObject(meshes[15]);
+	renderObject(meshes[15], 0.0f);
 	
 	// object animations below
 	meshes[15].transform.rotation.x += 0.005;					// ring_rot
@@ -894,7 +907,7 @@ void draw()
 // ------------------------------------------------------------------------------------------
 // This function is called to render an object to screen
 // ------------------------------------------------------------------------------------------
-void renderObject(Mesh mesh)
+void renderObject(Mesh mesh, float y_offset)
 {
 	// lay out variables from struct for clarity
 	GLuint object_index = mesh.object_index;
@@ -925,7 +938,7 @@ void renderObject(Mesh mesh)
 
 	// object transformations
 	// (formerly models[object_index])
-	models[object_index] = translate(mat4(1.0f), vec3(transform.translation.x, transform.translation.y, transform.translation.z)) *
+	models[object_index] = translate(mat4(1.0f), vec3(transform.translation.x, transform.translation.y + y_offset, transform.translation.z)) *
 		rotate(mat4(1.0f), transform.rotation.x, vec3(1.0f, 0.0f, 0.0f)) *
 		rotate(mat4(1.0f), transform.rotation.y, vec3(0.0f, 1.0f, 0.0f)) *
 		rotate(mat4(1.0f), transform.rotation.z, vec3(0.0f, 0.0f, 1.0f)) *
