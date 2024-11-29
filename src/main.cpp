@@ -394,25 +394,6 @@ void load()
 		&meshes[1]			// parent mesh: earth
 	));
 
-	// meshes[3] = saturn
-	meshes.push_back(Mesh(
-		"saturn",
-		0,
-		4,
-		TransformationValues(
-			glm::vec3(0.0f, 8.0f, 0.0f),
-			glm::vec3(0.0f, saturn_rot, 0.0f),
-			glm::vec3(0.4f, 0.4f, 0.4f)
-		),
-		MaterialProperties(
-			glm::vec3(0.1f, 0.1f, 0.1f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			glm::vec3(1.0f, 1.0f, 1.0f),
-			20.0f,
-			1.0f
-		)
-	));
-
 	// meshes[4] = stellar (stellated dodecahedron)
 	meshes.push_back(Mesh(
 		"stellar",
@@ -542,6 +523,25 @@ void load()
 			glm::vec3(1.0f, 1.0f, 1.0f),
 			glm::vec3(1.0f, 1.0f, 1.0f),
 			10.0f,
+			1.0f
+		)
+	));
+
+	// meshes[3] = saturn
+	meshes.push_back(Mesh(
+		"saturn",
+		0,
+		4,
+		TransformationValues(
+			glm::vec3(0.0f, 8.0f, 0.0f),
+			glm::vec3(0.0f, saturn_rot, 0.0f),
+			glm::vec3(0.4f, 0.4f, 0.4f)
+		),
+		MaterialProperties(
+			glm::vec3(0.1f, 0.1f, 0.1f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			glm::vec3(1.0f, 1.0f, 1.0f),
+			20.0f,
 			1.0f
 		)
 	));
@@ -786,21 +786,32 @@ void draw()
 
 	// Animation parameters
 	float currentTime = glfwGetTime(); // Time elapsed
-	float speed = 1.0f;                // Speed of movement
-	float loopHeight = 10.0f;          // Total height of the motion path
+	float speed = 0.5f;                // Speed of movement
+	float loopHeight = 15.0f;          // Total height of the motion path
 	int numObjects = 15;               // Total number of objects
-	float spacing = 20.0f; // Equal spacing between objects
+	float spacing = loopHeight / numObjects; // Equal spacing between objects
+	float totalLoopTime = loopHeight / speed;
 
 	// render thread
 	renderObject(meshes[0], 0.0f);
 
 	// Render objects with circular motion
 	for (int i = 1; i < numObjects; i++) {
-		// Calculate y-offset based on object's index and time
-		float y_offset = loopHeight - fmod(i * spacing + speed * currentTime, loopHeight);
+		// Calculate the starting time offset for this object
+		float startOffset = i * (loopHeight / speed / numObjects); // Use total time per object
 
-		// Render object at calculated position
-		renderObject(meshes[i], y_offset);
+		// Calculate the current relative position based on time and offset
+		float elapsedTime = fmod(currentTime - startOffset + totalLoopTime, totalLoopTime);
+
+		if (elapsedTime < 0) elapsedTime += totalLoopTime; // Ensure no negative time
+
+		// Determine y-offset (motion along the path)
+		float y_offset = loopHeight - fmod(elapsedTime * speed, loopHeight);
+
+		// Only render the object if it's within the visible path
+		if (y_offset >= -spacing) {
+			renderObject(meshes[i], y_offset);
+		}
 	}
 
 	// settings for alpha map usage
