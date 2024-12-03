@@ -37,9 +37,9 @@ double mouse_x, mouse_y;	//variables storing mouse position
 const vec3 g_backgroundColor(0.0f, 0.0f, 0.0f); // background colour - a GLM 3-component vector
 
 // uniform location variables
-GLuint model_loc, view_loc, projection_loc, normal_loc, texture_loc;
+GLuint model_loc, view_loc, projection_loc, normal_loc, texture_loc, texture_normal_loc, texture_spec_loc, texture_night_loc;
 GLuint light_loc, light_intensity_loc, cam_pos_loc, ambient_loc, diffuse_loc, specular_loc, shininess_loc, alpha_loc;
-GLuint offset_loc, particle_color_loc;
+GLuint offset_loc, particle_color_loc, has_multi_loc;
 
 // if using orthographic project, and if using orbital camera settings
 bool orthographic = false;
@@ -140,12 +140,10 @@ struct Mesh {
 	GLuint object_index;
 	GLuint texture_index;
 	mat4 model_matrix;
-	mat4 model_matrix_parent;
 	string mesh_name;
-	Mesh* mesh_parent;
 
 	// constructor 
-	Mesh(string name, GLuint object_i, GLuint texture_i, TransformationValues t_values, MaterialProperties m_props, Mesh* parent = nullptr) : mesh_name(name), object_index(object_i), texture_index(texture_i), transform(t_values), material(m_props), mesh_parent(parent) {}
+	Mesh(string name, GLuint object_i, GLuint texture_i, TransformationValues t_values, MaterialProperties m_props) : mesh_name(name), object_index(object_i), texture_index(texture_i), transform(t_values), material(m_props) {}
 };
 
 std::vector <Mesh> meshes;
@@ -274,6 +272,9 @@ void load()
 	textures.push_back("textures/AmongUs.jpg");
 	textures.push_back("textures/rings.png");
 	textures.push_back("textures/Starflake.png");
+	textures.push_back("textures/earthnormal.bmp");		// index 18
+	textures.push_back("textures/earthspec.bmp");		// index 19
+	textures.push_back("textures/earthnight.bmp");		// index 20 - 3 indices noted for hard-coded multi-texturing
 
 	texCount = textures.size();
 	texture_ids.resize(texCount);
@@ -286,6 +287,8 @@ void load()
 		glGenTextures(1, &texture_ids[i]);
 		glBindTexture(GL_TEXTURE_2D, texture_ids[i]);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+
+		cout << "texture_index[" << i << "]: ";
 
 		if (pixels) {
 			// if-else statement created to not run into error when numChannels is different (RGB, RGBA)
@@ -380,7 +383,7 @@ void load()
 		0,
 		3,
 		TransformationValues(
-			glm::vec3(0.0f, 0.0f, -3.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f),
 			glm::vec3(0.0f, moon_rot, 0.0f),
 			glm::vec3(0.125f, 0.125f, 0.125f)
 		),
@@ -390,8 +393,7 @@ void load()
 			glm::vec3(1.0f, 1.0f, 1.0f),
 			10.0f,
 			1.0f
-		),
-		&meshes[1]			// parent mesh: earth
+		)
 	));
 
 	// meshes[4] = stellar (stellated dodecahedron)
@@ -496,7 +498,7 @@ void load()
 		10,
 		TransformationValues(
 			glm::vec3(0.0f, 6.0f, 0.0f),
-			glm::vec3(90.0f, 0.0f, coin_rot),
+			glm::vec3(90.0f, 0.0f, 0.0f),
 			glm::vec3(0.5f, 0.5f, 0.5f)
 		),
 		MaterialProperties(
@@ -638,10 +640,8 @@ void load()
 			glm::vec3(1.0f, 1.0f, 1.0f),
 			20.0f,
 			-1.0f					// use -1.0f for alpha maps (just like skybox)
-		),
-		&meshes[3]
+		)
 	));
-	meshes[15].model_matrix_parent = meshes[3].model_matrix;
 
 	// meshes[16] = particle
 	meshes.push_back(Mesh(
@@ -667,7 +667,7 @@ void load()
 
 }
 
-void renderObject(Mesh mesh, float y_offset);
+void renderObject(GLuint shader, Mesh mesh, vec3 animation_translation);
 int firstUnusedParticle();
 void respawnParticle(Particle& particle, Mesh object);
 // ^ to tell the program these functions exists below
@@ -786,31 +786,38 @@ void draw()
 
 	// Animation parameters
 	float currentTime = glfwGetTime(); // Time elapsed
-	float speed = 0.5f;                // Speed of movement
+	float speed = 1.5f;                // Speed of movement
 	float loopHeight = 15.0f;          // Total height of the motion path
 	int numObjects = 15;               // Total number of objects
 	float spacing = loopHeight / numObjects; // Equal spacing between objects
 	float totalLoopTime = loopHeight / speed;
 
 	// render thread
-	renderObject(meshes[0], 0.0f);
+	renderObject(g_simpleShader, meshes[0], vec3(0.0f));
 
-	// Render objects with circular motion
+	// procedural animation
 	for (int i = 1; i < numObjects; i++) {
-		// Calculate the starting time offset for this object
-		float startOffset = i * (loopHeight / speed / numObjects); // Use total time per object
+		// start time offset
+		float startOffset = i * (loopHeight / speed / numObjects); // total time per object
 
-		// Calculate the current relative position based on time and offset
+		// current relative position
 		float elapsedTime = fmod(currentTime - startOffset + totalLoopTime, totalLoopTime);
 
-		if (elapsedTime < 0) elapsedTime += totalLoopTime; // Ensure no negative time
+		if (elapsedTime < 0) elapsedTime += totalLoopTime; // no negative time
 
-		// Determine y-offset (motion along the path)
+		// downward motion
 		float y_offset = loopHeight - fmod(elapsedTime * speed, loopHeight);
+
+		// horizontal zigzag motion
+		float x_offset = sin(elapsedTime * speed / loopHeight + i) * 2.0f;
+		float z_offset = cos(elapsedTime * speed / loopHeight + i) * 1.0f;
+
+		vec3 position = vec3(x_offset, y_offset, z_offset);
+		// combined motion
 
 		// Only render the object if it's within the visible path
 		if (y_offset >= -spacing) {
-			renderObject(meshes[i], y_offset);
+			renderObject(g_simpleShader, meshes[i], position);
 		}
 	}
 
@@ -822,7 +829,7 @@ void draw()
 
 	// rings (alpha map)
 
-	renderObject(meshes[15], 0.0f);
+	renderObject(g_simpleShader, meshes[15], vec3(0.0f));
 	
 	// object animations below
 	meshes[15].transform.rotation.x += 0.005;					// ring_rot
@@ -918,58 +925,91 @@ void draw()
 // ------------------------------------------------------------------------------------------
 // This function is called to render an object to screen
 // ------------------------------------------------------------------------------------------
-void renderObject(Mesh mesh, float y_offset)
+void renderObject(GLuint shader, Mesh mesh, vec3 animation_translation)
 {
 	// lay out variables from struct for clarity
 	GLuint object_index = mesh.object_index;
 	GLuint texture_index = mesh.texture_index;
 	TransformationValues transform = mesh.transform;
 	MaterialProperties material = mesh.material;
+	bool has_multitextures = false;
 
 	// activate shader
-	glUseProgram(g_simpleShader);
+	glUseProgram(shader);
 
 	// get uniform locations
-	texture_loc = glGetUniformLocation(g_simpleShader, "u_texture");
-	light_loc = glGetUniformLocation(g_simpleShader, "u_light");
-	light_intensity_loc = glGetUniformLocation(g_simpleShader, "u_light_intensity");
-	cam_pos_loc = glGetUniformLocation(g_simpleShader, "u_cam_pos");
-	ambient_loc = glGetUniformLocation(g_simpleShader, "u_ambient");
-	diffuse_loc = glGetUniformLocation(g_simpleShader, "u_diffuse");
-	specular_loc = glGetUniformLocation(g_simpleShader, "u_specular");
-	shininess_loc = glGetUniformLocation(g_simpleShader, "u_shininess");
-	alpha_loc = glGetUniformLocation(g_simpleShader, "u_alpha");
-	model_loc = glGetUniformLocation(g_simpleShader, "u_model");
-	normal_loc = glGetUniformLocation(g_simpleShader, "a_normal");
+	texture_loc = glGetUniformLocation(shader, "u_texture");
+	light_loc = glGetUniformLocation(shader, "u_light");
+	light_intensity_loc = glGetUniformLocation(shader, "u_light_intensity");
+	cam_pos_loc = glGetUniformLocation(shader, "u_cam_pos");
+	ambient_loc = glGetUniformLocation(shader, "u_ambient");
+	diffuse_loc = glGetUniformLocation(shader, "u_diffuse");
+	specular_loc = glGetUniformLocation(shader, "u_specular");
+	shininess_loc = glGetUniformLocation(shader, "u_shininess");
+	alpha_loc = glGetUniformLocation(shader, "u_alpha");
+	model_loc = glGetUniformLocation(shader, "u_model");
+	normal_loc = glGetUniformLocation(shader, "a_normal");
 
 	// render textures
 	glUniform1i(texture_loc, texture_index);
 	glActiveTexture(GL_TEXTURE0 + texture_index);
 	glBindTexture(GL_TEXTURE_2D, texture_ids[texture_index]);
 
+	// multi-texturing
+	// hard-coded for earth only since it's the only one with multi-texturing
+	// ideally should be included in the struct but it'll be empty for the rest so this'll do
+
+	if (mesh.mesh_name == "earth") {
+		GLuint texture_normal_index = 18;
+		GLuint texture_spec_index = 19;
+		GLuint texture_night_index = 20;
+		has_multitextures = true;
+
+		has_multi_loc = glGetUniformLocation(g_simpleShader, "u_has_multitextures");
+		glUniform1i(has_multi_loc, has_multitextures);
+
+		texture_normal_loc = glGetUniformLocation(shader, "u_texture_normal");
+		glUniform1i(texture_normal_loc, texture_normal_index);
+		glActiveTexture(GL_TEXTURE0 + texture_normal_index);
+		glBindTexture(GL_TEXTURE_2D, texture_ids[texture_normal_index]);
+
+		texture_spec_loc = glGetUniformLocation(shader, "u_texture_spec");
+		glUniform1i(texture_spec_loc, texture_spec_index);
+		glActiveTexture(GL_TEXTURE0 + texture_spec_index);
+		glBindTexture(GL_TEXTURE_2D, texture_ids[texture_spec_index]);
+
+		texture_night_loc = glGetUniformLocation(shader, "u_texture_night");
+		glUniform1i(texture_night_loc, texture_night_index);
+		glActiveTexture(GL_TEXTURE0 + texture_night_index);
+		glBindTexture(GL_TEXTURE_2D, texture_ids[texture_night_index]);
+	}
+	else {
+		has_multitextures = false;
+		has_multi_loc = glGetUniformLocation(g_simpleShader, "u_has_multitextures");
+		glUniform1i(has_multi_loc, has_multitextures);
+		
+		glActiveTexture(GL_TEXTURE0 + 18);
+		glBindTexture(GL_TEXTURE_2D, 0);
+
+		glActiveTexture(GL_TEXTURE0 + 19);
+		glBindTexture(GL_TEXTURE_2D, 0);
+
+		glActiveTexture(GL_TEXTURE0 + 20);
+		glBindTexture(GL_TEXTURE_2D, 0);
+	}
+
 	// object transformations
 	// (formerly models[object_index])
-	models[object_index] = translate(mat4(1.0f), vec3(transform.translation.x, transform.translation.y + y_offset, transform.translation.z)) *
+	models[object_index] = translate(mat4(1.0f), vec3(
+		transform.translation.x + animation_translation.x,
+		transform.translation.y + animation_translation.y,
+		transform.translation.z + animation_translation.z)) *
 		rotate(mat4(1.0f), transform.rotation.x, vec3(1.0f, 0.0f, 0.0f)) *
 		rotate(mat4(1.0f), transform.rotation.y, vec3(0.0f, 1.0f, 0.0f)) *
 		rotate(mat4(1.0f), transform.rotation.z, vec3(0.0f, 0.0f, 1.0f)) *
 		scale(mat4(1.0f), vec3(transform.scale.x, transform.scale.y, transform.scale.z));
 
 	mesh.model_matrix = models[object_index];
-
-	// old code
-	/*if (mesh.model_matrix_parent != mat4(0.0f)) {
-		models[texture_index] = mesh.model_matrix_parent * models[texture_index];
-	}*/
-
-	// perform parenting if model has one
-	if (mesh.mesh_parent != nullptr) {
-		Mesh& parent = *mesh.mesh_parent;
-		mesh.model_matrix = parent.model_matrix * mesh.model_matrix;
-
-		//mesh.model_matrix = mesh.model_matrix_parent * mesh.model_matrix;
-		//cout << "Mesh " << mesh.mesh_name << " has a parent model." << endl;
-	}
 
 	// send transformations and normals to shader
 	glUniformMatrix4fv(model_loc, 1, GL_FALSE, glm::value_ptr(mesh.model_matrix));	//(models[object_index]));
